@@ -8,10 +8,11 @@ import (
 )
 
 type Config struct {
-	Env         string `env:"ENV" envDefault:"dev"`
-	GRPC        GRPCConfig
-	DatabaseUrl string        `env:"DATABASE_URL" env-required:"true"`
-	TokenTTL    time.Duration `env:"TOKEN_TTL" envDefault:"1h"`
+	Env          string `env:"ENV" envDefault:"dev"`
+	GRPC         GRPCConfig
+	DatabaseUrl  string        `env:"DATABASE_URL" env-required:"true"`
+	TokenTTL     time.Duration `env:"TOKEN_TTL" envDefault:"1h"`
+	PasswordCost int           `env:"PASSWORD_COST" envDefault:"10"` // use bcrypt.DefaultCost
 }
 
 type GRPCConfig struct {

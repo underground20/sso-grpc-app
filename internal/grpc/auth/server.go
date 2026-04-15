@@ -5,7 +5,7 @@ import (
 	"errors"
 	"log/slog"
 
-	sso "github.com/GolangLessons/protos/gen/go/sso"
+	sso "github.com/underground20/sso-grpc-contract/generated"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"

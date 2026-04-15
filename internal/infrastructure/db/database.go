@@ -1,4 +1,4 @@
-package storage
+package db
 
 import (
 	"context"
@@ -7,7 +7,7 @@ import (
 )
 
 type Database struct {
-	conn *pgxpool.Pool
+	Conn *pgxpool.Pool
 }
 
 func New(databaseUrl string, ctx context.Context) (*Database, error) {
@@ -16,5 +16,5 @@ func New(databaseUrl string, ctx context.Context) (*Database, error) {
 		return nil, err
 	}
 
-	return &Database{conn: conn}, nil
+	return &Database{Conn: conn}, nil
 }

@@ -1,13 +1,14 @@
 package jwt
 
 import (
-	"app/internal/domain/models"
+	app "app/internal/auth/app/model"
+	user "app/internal/auth/user/model"
 	"time"
 
 	"github.com/golang-jwt/jwt/v5"
 )
 
-func NewToken(user models.User, app models.App, duration time.Duration) (string, error) {
+func NewToken(user user.User, app app.App, duration time.Duration) (string, error) {
 	if duration <= 0 {
 		return "", jwt.ErrTokenInvalidClaims
 	}

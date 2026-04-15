@@ -8,9 +8,9 @@ import (
 	"strconv"
 	"testing"
 
-	sso "github.com/GolangLessons/protos/gen/go/sso"
 	"github.com/ilyakaznacheev/cleanenv"
 	"github.com/jackc/pgx/v5"
+	sso "github.com/underground20/sso-grpc-contract/generated"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
 )

@@ -1,7 +1,8 @@
 package storage
 
 import (
-	"app/internal/domain/models"
+	"app/internal/infrastructure/db"
+	"app/internal/models"
 	"context"
 	"errors"
 	"fmt"
@@ -12,19 +13,18 @@ import (
 var (
 	ErrUserExists   = errors.New("user already exists")
 	ErrUserNotFound = errors.New("user not found")
-	ErrAppNotFound  = errors.New("app not found")
 )
 
-type Storage struct {
-	db *Database
+type UserStorage struct {
+	db *db.Database
 }
 
-func NewStorage(db *Database) Storage {
-	return Storage{db: db}
+func NewUserStorage(db *db.Database) UserStorage {
+	return UserStorage{db: db}
 }
 
-func (s Storage) GetUser(ctx context.Context, email string) (models.User, error) {
-	rows, err := s.db.conn.Query(
+func (s UserStorage) GetUser(ctx context.Context, email string) (models.User, error) {
+	rows, err := s.db.Conn.Query(
 		ctx,
 		`SELECT id, email, pass_hash FROM users WHERE email = $1`,
 		email,
@@ -46,8 +46,8 @@ func (s Storage) GetUser(ctx context.Context, email string) (models.User, error)
 	return user, nil
 }
 
-func (s Storage) SaveUser(ctx context.Context, email string, password []byte) (int64, error) {
-	rows, err := s.db.conn.Query(
+func (s UserStorage) SaveUser(ctx context.Context, email string, password []byte) (int64, error) {
+	rows, err := s.db.Conn.Query(
 		ctx,
 		`INSERT INTO users (email, pass_hash) VALUES ($1, $2) ON CONFLICT (email) DO NOTHING RETURNING id`,
 		email,
@@ -67,27 +67,4 @@ func (s Storage) SaveUser(ctx context.Context, email string, password []byte) (i
 	}
 
 	return id, nil
-}
-
-func (s Storage) GetApp(ctx context.Context, appID int) (models.App, error) {
-	rows, err := s.db.conn.Query(
-		ctx,
-		`SELECT id, name, secret FROM apps WHERE id = $1`,
-		appID,
-	)
-
-	if err != nil {
-		return models.App{}, fmt.Errorf("failed to query app: %w", err)
-	}
-	defer rows.Close()
-
-	app, err := pgx.CollectOneRow(rows, pgx.RowToStructByName[models.App])
-	if err != nil {
-		if errors.Is(err, pgx.ErrNoRows) {
-			return models.App{}, ErrAppNotFound
-		}
-		return models.App{}, fmt.Errorf("failed to collect row: %w", err)
-	}
-
-	return app, nil
 }

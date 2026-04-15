@@ -1,7 +1,8 @@
 package jwt
 
 import (
-	"app/internal/domain/models"
+	app "app/internal/auth/app/model"
+	user "app/internal/auth/user/model"
 	"testing"
 	"time"
 
@@ -11,20 +12,20 @@ import (
 )
 
 func TestNewToken(t *testing.T) {
-	app := models.App{
+	app := app.App{
 		ID:     1,
 		Secret: "test-secret",
 	}
 
 	tests := []struct {
 		name     string
-		user     models.User
+		user     user.User
 		duration time.Duration
 		wantErr  bool
 	}{
 		{
 			name: "Successful token generation",
-			user: models.User{
+			user: user.User{
 				ID:    1,
 				Email: "test@example.com",
 			},
@@ -33,7 +34,7 @@ func TestNewToken(t *testing.T) {
 		},
 		{
 			name: "Zero duration",
-			user: models.User{
+			user: user.User{
 				ID:    3,
 				Email: "test3@example.com",
 			},
@@ -42,7 +43,7 @@ func TestNewToken(t *testing.T) {
 		},
 		{
 			name: "User with empty email",
-			user: models.User{
+			user: user.User{
 				ID:    4,
 				Email: "",
 			},

@@ -4,10 +4,10 @@ import (
 	"app/tests/suite"
 	"testing"
 
-	sso "github.com/GolangLessons/protos/gen/go/sso"
 	"github.com/golang-jwt/jwt/v5"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	sso "github.com/underground20/sso-grpc-contract/generated"
 )
 
 const (

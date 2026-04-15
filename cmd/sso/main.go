@@ -2,8 +2,9 @@ package main
 
 import (
 	"app/internal/app"
+	"app/internal/auth"
 	"app/internal/config"
-	"app/internal/services/auth"
+	"app/internal/infrastructure/db"
 	"app/internal/storage"
 	"context"
 	"log"
@@ -21,14 +22,15 @@ const (
 func main() {
 	cfg := config.MustLoad()
 	ctx := context.Background()
-	db, err := storage.New(cfg.DatabaseUrl, ctx)
+	db, err := db.New(cfg.DatabaseUrl, ctx)
 	if err != nil {
 		log.Fatalf("Failed to connect to database: %v", err)
 	}
 
 	logger := setupLogger(cfg.Env)
-	store := storage.NewStorage(db)
-	auth := auth.New(logger, store, store, cfg.TokenTTL)
+	userStorage := storage.NewUserStorage(db)
+	appStorage := storage.NewAppStorage(db)
+	auth := auth.New(logger, userStorage, appStorage, cfg.TokenTTL, cfg.PasswordCost)
 	app := app.New(logger, auth, cfg.GRPC.Port, cfg.TokenTTL)
 
 	go func() {

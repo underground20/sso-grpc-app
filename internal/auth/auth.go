@@ -1,8 +1,8 @@
 package auth
 
 import (
-	"app/internal/domain/models"
-	"app/internal/infrastructure/jwt"
+	"app/internal/auth/jwt"
+	"app/internal/models"
 	"app/internal/storage"
 	"context"
 	"errors"
@@ -27,10 +27,11 @@ type AppProvider interface {
 }
 
 type Auth struct {
-	logger      *slog.Logger
-	userStorage UserStorage
-	appProvider AppProvider
-	tokenTTL    time.Duration
+	logger       *slog.Logger
+	userStorage  UserStorage
+	appProvider  AppProvider
+	tokenTTL     time.Duration
+	passwordCost int
 }
 
 func New(
@@ -38,12 +39,14 @@ func New(
 	userStorage UserStorage,
 	appProvider AppProvider,
 	tokenTTL time.Duration,
+	passwordCost int,
 ) *Auth {
 	return &Auth{
-		logger:      logger,
-		userStorage: userStorage,
-		appProvider: appProvider,
-		tokenTTL:    tokenTTL,
+		logger:       logger,
+		userStorage:  userStorage,
+		appProvider:  appProvider,
+		tokenTTL:     tokenTTL,
+		passwordCost: passwordCost,
 	}
 }
 
@@ -75,7 +78,7 @@ func (a *Auth) Login(ctx context.Context, email, password string, appId int) (st
 }
 
 func (a *Auth) RegisterNewUser(ctx context.Context, email, password string) (int64, error) {
-	passwordHash, err := bcrypt.GenerateFromPassword([]byte(password), bcrypt.DefaultCost)
+	passwordHash, err := bcrypt.GenerateFromPassword([]byte(password), a.passwordCost)
 	if err != nil {
 		return 0, fmt.Errorf("failed to generate password hash: %w", err)
 	}
