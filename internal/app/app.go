@@ -22,7 +22,7 @@ type App struct {
 	tokenTTL   time.Duration
 }
 
-func New(logger *slog.Logger, authServer auth.Auth, port int, tokenTTL time.Duration) *App {
+func New(logger *slog.Logger, authServer auth.Auth, roleProvider auth.RoleProvider, port int, tokenTTL time.Duration) *App {
 	recoveryOptions := []recovery.Option{
 		recovery.WithRecoveryHandler(func(p interface{}) error {
 			logger.Error("Recovered from panic", slog.Any("panic", p))
@@ -42,7 +42,7 @@ func New(logger *slog.Logger, authServer auth.Auth, port int, tokenTTL time.Dura
 		logging.UnaryServerInterceptor(interceptorLogger(logger), loggingOptions...),
 	))
 
-	auth.Register(gRPCServer, authServer, logger)
+	auth.Register(gRPCServer, authServer, roleProvider, logger)
 
 	return &App{
 		logger:     logger,

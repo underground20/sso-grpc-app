@@ -10,6 +10,7 @@ import (
 type Config struct {
 	Env          string `env:"ENV" envDefault:"dev"`
 	GRPC         GRPCConfig
+	HTTP         HTTPConfig
 	DatabaseUrl  string        `env:"DATABASE_URL" env-required:"true"`
 	TokenTTL     time.Duration `env:"TOKEN_TTL" envDefault:"1h"`
 	PasswordCost int           `env:"PASSWORD_COST" envDefault:"10"` // use bcrypt.DefaultCost
@@ -18,6 +19,11 @@ type Config struct {
 type GRPCConfig struct {
 	Port    int           `env:"GRPC_PORT"`
 	Timeout time.Duration `env:"GRPC_TIMEOUT"`
+}
+
+type HTTPConfig struct {
+	Port    int           `env:"HTTP_PORT"`
+	Timeout time.Duration `env:"HTTP_TIMEOUT" envDefault:"2s"`
 }
 
 func MustLoad() *Config {

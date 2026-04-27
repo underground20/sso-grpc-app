@@ -44,3 +44,15 @@ func (s AppStorage) GetApp(ctx context.Context, appID int) (models.App, error) {
 
 	return app, nil
 }
+
+func (s AppStorage) RegisterApp(ctx context.Context, name, secret string) (int, error) {
+	const op = "storage.app.RegisterApp"
+	var id int
+	query := `INSERT INTO apps(name, secret) VALUES ($1, $2) RETURNING id`
+	err := s.db.Conn.QueryRow(ctx, query, name, secret).Scan(&id)
+	if err != nil {
+		return 0, fmt.Errorf("%s: %w", op, err)
+	}
+
+	return id, nil
+}

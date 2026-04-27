@@ -4,21 +4,9 @@ services:
             context: .
             dockerfile: build/app/Dockerfile
         env_file:
-            - .env
+            - ./tests/.env
         ports:
             - ${GRPC_PORT}:${GRPC_PORT}
-        restart: unless-stopped
-        depends_on:
-            postgres:
-                condition: service_healthy
-    admin:
-        build:
-            context: .
-            dockerfile: build/admin/Dockerfile
-        env_file:
-            - .env
-        ports:
-            - ${HTTP_PORT}:${HTTP_PORT}
         restart: unless-stopped
         depends_on:
             postgres:
@@ -31,7 +19,7 @@ services:
         volumes:
             - ./migrations:/migrations
         env_file:
-            - .env
+            - ./tests/.env
         command: [
             "-path=/migrations",
             "-database=${DATABASE_URL}",
@@ -44,7 +32,7 @@ services:
             POSTGRES_PASSWORD: ${DB_PASSWORD}
             POSTGRES_DB: ${DB_NAME}
         env_file:
-            - .env
+            - ./tests/.env
         ports:
             - "5432:5432"
         healthcheck:

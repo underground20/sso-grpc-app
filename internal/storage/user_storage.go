@@ -7,6 +7,7 @@ import (
 	"errors"
 	"fmt"
 
+	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 )
 
@@ -26,7 +27,7 @@ func NewUserStorage(db *db.Database) UserStorage {
 func (s UserStorage) GetUser(ctx context.Context, email string) (models.User, error) {
 	rows, err := s.db.Conn.Query(
 		ctx,
-		`SELECT id, email, pass_hash FROM users WHERE email = $1`,
+		`SELECT id, email, pass_hash, username, status, created_at, last_login FROM users WHERE email = $1`,
 		email,
 	)
 
@@ -46,25 +47,49 @@ func (s UserStorage) GetUser(ctx context.Context, email string) (models.User, er
 	return user, nil
 }
 
-func (s UserStorage) SaveUser(ctx context.Context, email string, password []byte) (int64, error) {
+func (s UserStorage) SaveUser(ctx context.Context, uuid uuid.UUID, email string, password []byte) error {
 	rows, err := s.db.Conn.Query(
 		ctx,
-		`INSERT INTO users (email, pass_hash) VALUES ($1, $2) ON CONFLICT (email) DO NOTHING RETURNING id`,
+		`INSERT INTO users (id, email, pass_hash) 
+			VALUES ($1, $2, $3) ON CONFLICT (email) DO NOTHING RETURNING id
+		`,
+		uuid,
 		email,
 		password,
 	)
 	if err != nil {
-		return 0, fmt.Errorf("failed to execute query: %w", err)
+		return fmt.Errorf("failed to execute query: %w", err)
 	}
 	defer rows.Close()
 
-	id, err := pgx.CollectOneRow(rows, pgx.RowTo[int64])
+	_, err = pgx.CollectOneRow(rows, pgx.RowTo[string])
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
-			return 0, ErrUserExists
+			return ErrUserExists
 		}
-		return 0, fmt.Errorf("failed to collect row: %w", err)
+		return fmt.Errorf("failed to collect row: %w", err)
 	}
 
-	return id, nil
+	return nil
+}
+
+func (s UserStorage) UpdateLastLogin(ctx context.Context, userID string) error {
+	_, err := s.db.Conn.Exec(
+		ctx,
+		`UPDATE users SET last_login = NOW() WHERE id = $1`,
+		userID,
+	)
+
+	return err
+}
+
+func (s UserStorage) AddRole(ctx context.Context, userID string, roleID int) error {
+	_, err := s.db.Conn.Exec(
+		ctx,
+		`INSERT INTO user_roles (user_id, role_id) VALUES ($1, $2)`,
+		userID,
+		roleID,
+	)
+
+	return err
 }

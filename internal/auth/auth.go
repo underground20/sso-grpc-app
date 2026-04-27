@@ -1,15 +1,15 @@
 package auth
 
 import (
-	"app/internal/auth/jwt"
 	"app/internal/models"
 	"app/internal/storage"
 	"context"
 	"errors"
 	"fmt"
 	"log/slog"
-	"time"
 
+	"github.com/google/uuid"
+	jwt "github.com/underground20/sso-jwt-token/pkg/jwt/user"
 	"golang.org/x/crypto/bcrypt"
 )
 
@@ -19,7 +19,8 @@ var (
 
 type UserStorage interface {
 	GetUser(ctx context.Context, email string) (models.User, error)
-	SaveUser(ctx context.Context, email string, password []byte) (int64, error)
+	SaveUser(ctx context.Context, uuid uuid.UUID, email string, password []byte) error
+	UpdateLastLogin(ctx context.Context, userID string) error
 }
 
 type AppProvider interface {
@@ -27,26 +28,26 @@ type AppProvider interface {
 }
 
 type Auth struct {
-	logger       *slog.Logger
-	userStorage  UserStorage
-	appProvider  AppProvider
-	tokenTTL     time.Duration
-	passwordCost int
+	logger         *slog.Logger
+	userStorage    UserStorage
+	appProvider    AppProvider
+	tokenGenerator *jwt.TokenGenerator
+	passwordCost   int
 }
 
 func New(
 	logger *slog.Logger,
 	userStorage UserStorage,
 	appProvider AppProvider,
-	tokenTTL time.Duration,
+	tokenGenerator *jwt.TokenGenerator,
 	passwordCost int,
 ) *Auth {
 	return &Auth{
-		logger:       logger,
-		userStorage:  userStorage,
-		appProvider:  appProvider,
-		tokenTTL:     tokenTTL,
-		passwordCost: passwordCost,
+		logger:         logger,
+		userStorage:    userStorage,
+		appProvider:    appProvider,
+		tokenGenerator: tokenGenerator,
+		passwordCost:   passwordCost,
 	}
 }
 
@@ -56,6 +57,8 @@ func (a *Auth) Login(ctx context.Context, email, password string, appId int) (st
 		if errors.Is(err, storage.ErrUserNotFound) {
 			return "", ErrInvalidCredentials
 		}
+
+		return "", err
 	}
 
 	if err := bcrypt.CompareHashAndPassword(user.PassHash, []byte(password)); err != nil {
@@ -64,12 +67,24 @@ func (a *Auth) Login(ctx context.Context, email, password string, appId int) (st
 		return "", ErrInvalidCredentials
 	}
 
+	err = a.userStorage.UpdateLastLogin(ctx, user.ID)
+	if err != nil {
+		return "", err
+	}
+
 	app, err := a.appProvider.GetApp(ctx, appId)
 	if err != nil {
 		return "", err
 	}
 
-	token, err := jwt.NewToken(user, app, a.tokenTTL)
+	token, err := a.tokenGenerator.Generate(
+		user.ID,
+		app.Name,
+		jwt.Info{
+			Email: user.Email,
+		},
+		app.Secret,
+	)
 	if err != nil {
 		return "", err
 	}
@@ -77,16 +92,21 @@ func (a *Auth) Login(ctx context.Context, email, password string, appId int) (st
 	return token, nil
 }
 
-func (a *Auth) RegisterNewUser(ctx context.Context, email, password string) (int64, error) {
+func (a *Auth) RegisterNewUser(ctx context.Context, email, password string) (string, error) {
 	passwordHash, err := bcrypt.GenerateFromPassword([]byte(password), a.passwordCost)
 	if err != nil {
-		return 0, fmt.Errorf("failed to generate password hash: %w", err)
+		return "", fmt.Errorf("failed to generate password hash: %w", err)
 	}
 
-	id, err := a.userStorage.SaveUser(ctx, email, passwordHash)
+	newUuid, err := uuid.NewV7()
 	if err != nil {
-		return 0, fmt.Errorf("failed to save user: %w", err)
+		return "", fmt.Errorf("failed to generate uuid: %w", err)
 	}
 
-	return id, nil
+	err = a.userStorage.SaveUser(ctx, newUuid, email, passwordHash)
+	if err != nil {
+		return "", fmt.Errorf("failed to save user: %w", err)
+	}
+
+	return newUuid.String(), nil
 }

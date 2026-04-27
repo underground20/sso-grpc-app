@@ -1,71 +1,85 @@
 package suite
 
 import (
-	"app/internal/config"
+	"app/internal/infrastructure/db"
+	"app/internal/storage"
 	"context"
 	"log"
-	"net"
-	"strconv"
+	"os"
 	"testing"
+	"time"
 
-	"github.com/ilyakaznacheev/cleanenv"
-	"github.com/jackc/pgx/v5"
+	"github.com/google/uuid"
 	sso "github.com/underground20/sso-grpc-contract/generated"
+	"golang.org/x/crypto/bcrypt"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
 )
 
-const (
-	grpcHost    = "localhost"
-	databaseUrl = "postgres://admin:admin@localhost:5432/app?sslmode=disable"
-)
-
 type Suite struct {
 	*testing.T
-	Cfg        *config.Config
-	AuthClient sso.AuthClient
-	Connection *pgx.Conn
+	AuthClient  sso.AuthClient
+	db          *db.Database
+	AppStorage  storage.AppStorage
+	RoleStorage storage.RoleStorage
+	UserStorage storage.UserStorage
 }
 
 func New(t *testing.T) (context.Context, *Suite) {
 	t.Helper()
-	t.Parallel()
 
-	cfg := loadConfig()
-	ctx, cancelCtx := context.WithTimeout(context.Background(), cfg.GRPC.Timeout)
+	ctx, cancelCtx := context.WithTimeout(context.Background(), time.Minute*1)
 
 	t.Cleanup(func() {
 		t.Helper()
 		cancelCtx()
 	})
 
-	grpcAddress := net.JoinHostPort(grpcHost, strconv.Itoa(cfg.GRPC.Port))
-
+	grpcAddress := getEnv("LOCAL_GRPC_ADDRESS", "localhost:44044")
+	databaseUrl := getEnv("LOCAL_DATABASE_URL", "postgres://admin:admin@localhost:5432/app_test?sslmode=disable")
 	cc, err := grpc.NewClient(grpcAddress, grpc.WithTransportCredentials(insecure.NewCredentials()))
 	if err != nil {
 		log.Fatalf("grpc client connect failed: %v", err)
 	}
 
 	authClient := sso.NewAuthClient(cc)
-	connection, err := pgx.Connect(ctx, databaseUrl)
+	database, err := db.New(databaseUrl, ctx)
 	if err != nil {
 		panic(err)
 	}
 
+	appStorage := storage.NewAppStorage(database)
+	roleStorage := storage.NewRoleStorage(database)
+	userStorage := storage.NewUserStorage(database)
+
 	return ctx, &Suite{
-		T:          t,
-		Cfg:        cfg,
-		AuthClient: authClient,
-		Connection: connection,
+		T:           t,
+		AuthClient:  authClient,
+		db:          database,
+		AppStorage:  appStorage,
+		RoleStorage: roleStorage,
+		UserStorage: userStorage,
 	}
 }
 
-func loadConfig() *config.Config {
-	var cfg config.Config
-	err := cleanenv.ReadConfig("../.env", &cfg)
-	if err != nil {
-		log.Fatal(err)
-	}
+func (s *Suite) CreateUser(ctx context.Context, email, password string) string {
+	userUuid, _ := uuid.NewV7()
+	passwordHash, _ := bcrypt.GenerateFromPassword([]byte(password), bcrypt.MinCost)
+	_ = s.UserStorage.SaveUser(ctx, userUuid, email, passwordHash)
+	return userUuid.String()
+}
 
-	return &cfg
+func (s *Suite) Cleanup(ctx context.Context) {
+	s.T.Cleanup(func() {
+		s.db.Conn.Exec(ctx, "TRUNCATE TABLE users CASCADE")
+		s.db.Conn.Exec(ctx, "TRUNCATE TABLE apps CASCADE")
+		s.db.Conn.Exec(ctx, "TRUNCATE TABLE roles CASCADE")
+	})
+}
+
+func getEnv(key, fallback string) string {
+	if value, ok := os.LookupEnv(key); ok {
+		return value
+	}
+	return fallback
 }

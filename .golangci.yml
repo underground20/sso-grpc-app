@@ -1,0 +1,39 @@
+linters:
+    enable:
+        - staticcheck
+        - errcheck
+        - govet
+        - gofmt
+        - goimports
+        - gosec
+        - unused
+        - unparam
+        - gocritic
+    
+linters-settings:
+    staticcheck:
+        checks: ["SA5011"]
+    gofmt:
+        simplify: true
+
+issues:
+    exclude-dirs:
+        - tests
+    exclude-rules:
+        - path: _test\.go
+          linters:
+              - staticcheck
+              - gosec
+              - errcheck
+          text: ".*" 
+        - path: role_storage.go
+          linters:
+              - errcheck
+          text: ".*"
+
+output:
+    formats:
+        - format: colored-line-number
+    print-issued-lines: true
+    print-linter-name: true
+          

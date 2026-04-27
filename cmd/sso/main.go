@@ -5,18 +5,15 @@ import (
 	"app/internal/auth"
 	"app/internal/config"
 	"app/internal/infrastructure/db"
+	"app/internal/infrastructure/logging"
 	"app/internal/storage"
 	"context"
 	"log"
-	"log/slog"
 	"os"
 	"os/signal"
 	"syscall"
-)
 
-const (
-	envDev  = "dev"
-	envProd = "prod"
+	"github.com/underground20/sso-jwt-token/pkg/jwt/user"
 )
 
 func main() {
@@ -27,32 +24,26 @@ func main() {
 		log.Fatalf("Failed to connect to database: %v", err)
 	}
 
-	logger := setupLogger(cfg.Env)
+	logger := logging.Setup(cfg.Env)
 	userStorage := storage.NewUserStorage(db)
 	appStorage := storage.NewAppStorage(db)
-	auth := auth.New(logger, userStorage, appStorage, cfg.TokenTTL, cfg.PasswordCost)
-	app := app.New(logger, auth, cfg.GRPC.Port, cfg.TokenTTL)
+	tokenGenerator, err := user.NewTokenGenerator(cfg.TokenTTL)
+	if err != nil {
+		log.Fatalf("Failed to create token generator: %v", err)
+	}
+
+	auth := auth.New(logger, userStorage, appStorage, tokenGenerator, cfg.PasswordCost)
+	roleProvider := storage.NewRoleStorage(db)
+	grpcApp := app.New(logger, auth, roleProvider, cfg.GRPC.Port, cfg.TokenTTL)
 
 	go func() {
-		app.MustRun()
+		grpcApp.MustRun()
 	}()
 
 	stop := make(chan os.Signal, 1)
 	signal.Notify(stop, syscall.SIGTERM, syscall.SIGINT)
-
 	<-stop
 
-	app.Stop()
+	grpcApp.Stop()
 	logger.Info("Graceful shutdown")
-}
-
-func setupLogger(env string) *slog.Logger {
-	switch env {
-	case envDev:
-		return slog.New(slog.NewTextHandler(os.Stdout, &slog.HandlerOptions{Level: slog.LevelDebug}))
-	case envProd:
-		return slog.New(slog.NewJSONHandler(os.Stdout, &slog.HandlerOptions{Level: slog.LevelInfo}))
-	default:
-		return slog.New(slog.NewJSONHandler(os.Stdout, &slog.HandlerOptions{Level: slog.LevelInfo}))
-	}
 }
