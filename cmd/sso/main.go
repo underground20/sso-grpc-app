@@ -25,16 +25,16 @@ func main() {
 	}
 
 	logger := logging.Setup(cfg.Env)
-	userStorage := storage.NewUserStorage(db)
+	userStorage := storage.NewUserStorage(db, logger)
 	appStorage := storage.NewAppStorage(db)
 	tokenGenerator, err := user.NewTokenGenerator(cfg.TokenTTL)
+	roleProvider := storage.NewRoleStorage(db, logger)
 	if err != nil {
 		log.Fatalf("Failed to create token generator: %v", err)
 	}
 
-	auth := auth.New(logger, userStorage, appStorage, tokenGenerator, cfg.PasswordCost)
-	roleProvider := storage.NewRoleStorage(db)
-	grpcApp := app.New(logger, auth, roleProvider, cfg.GRPC.Port, cfg.TokenTTL)
+	auth := auth.New(logger, userStorage, appStorage, roleProvider, tokenGenerator, cfg.PasswordCost)
+	grpcApp := app.New(logger, auth, cfg.GRPC.Port, cfg.TokenTTL)
 
 	go func() {
 		grpcApp.MustRun()

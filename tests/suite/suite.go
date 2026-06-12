@@ -2,6 +2,7 @@ package suite
 
 import (
 	"app/internal/infrastructure/db"
+	"app/internal/infrastructure/logging"
 	"app/internal/storage"
 	"context"
 	"log"
@@ -48,9 +49,10 @@ func New(t *testing.T) (context.Context, *Suite) {
 		panic(err)
 	}
 
+	logger := logging.Setup(getEnv("ENV", "test"))
 	appStorage := storage.NewAppStorage(database)
-	roleStorage := storage.NewRoleStorage(database)
-	userStorage := storage.NewUserStorage(database)
+	roleStorage := storage.NewRoleStorage(database, logger)
+	userStorage := storage.NewUserStorage(database, logger)
 
 	return ctx, &Suite{
 		T:           t,
@@ -62,10 +64,10 @@ func New(t *testing.T) (context.Context, *Suite) {
 	}
 }
 
-func (s *Suite) CreateUser(ctx context.Context, email, password string) string {
+func (s *Suite) CreateUser(ctx context.Context, email, password, username string, roles []int64) string {
 	userUuid, _ := uuid.NewV7()
 	passwordHash, _ := bcrypt.GenerateFromPassword([]byte(password), bcrypt.MinCost)
-	_ = s.UserStorage.SaveUser(ctx, userUuid, email, passwordHash)
+	_ = s.UserStorage.SaveUser(ctx, userUuid, email, passwordHash, username, roles)
 	return userUuid.String()
 }
 

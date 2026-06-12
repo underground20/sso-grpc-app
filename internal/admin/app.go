@@ -16,7 +16,7 @@ type AppCreator interface {
 }
 
 type RoleCreator interface {
-	CreateRole(ctx context.Context, name string, permissions []string) error
+	CreateRole(ctx context.Context, name string, permissions []string) (int, error)
 }
 
 type App struct {

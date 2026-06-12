@@ -23,7 +23,7 @@ func main() {
 
 	logger := logging.Setup(cfg.Env)
 	appCreator := storage.NewAppStorage(db)
-	roleCreator := storage.NewRoleStorage(db)
+	roleCreator := storage.NewRoleStorage(db, logger)
 	adminApp := admin.New(cfg.HTTP, logger, appCreator, roleCreator)
 
 	go func() {

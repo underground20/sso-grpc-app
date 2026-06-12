@@ -10,6 +10,7 @@ import (
 
 	"github.com/grpc-ecosystem/go-grpc-middleware/v2/interceptors/logging"
 	"github.com/grpc-ecosystem/go-grpc-middleware/v2/interceptors/recovery"
+	sso "github.com/underground20/sso-grpc-contract/generated"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
@@ -22,7 +23,7 @@ type App struct {
 	tokenTTL   time.Duration
 }
 
-func New(logger *slog.Logger, authServer auth.Auth, roleProvider auth.RoleProvider, port int, tokenTTL time.Duration) *App {
+func New(logger *slog.Logger, authServer auth.Auth, port int, tokenTTL time.Duration) *App {
 	recoveryOptions := []recovery.Option{
 		recovery.WithRecoveryHandler(func(p interface{}) error {
 			logger.Error("Recovered from panic", slog.Any("panic", p))
@@ -42,7 +43,7 @@ func New(logger *slog.Logger, authServer auth.Auth, roleProvider auth.RoleProvid
 		logging.UnaryServerInterceptor(interceptorLogger(logger), loggingOptions...),
 	))
 
-	auth.Register(gRPCServer, authServer, roleProvider, logger)
+	sso.RegisterAuthServer(gRPCServer, auth.NewServer(authServer, logger))
 
 	return &App{
 		logger:     logger,

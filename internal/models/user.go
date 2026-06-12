@@ -10,4 +10,6 @@ type User struct {
 	Status    int        `db:"status"`
 	CreatedAt time.Time  `db:"created_at"`
 	LastLogin *time.Time `db:"last_login"`
+	Roles     []string   `db:"-"`
+	Scopes    []string   `db:"-"`
 }

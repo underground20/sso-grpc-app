@@ -19,9 +19,13 @@ func TestRegisterSuccess(t *testing.T) {
 	ctx, suite := suite.New(t)
 	suite.Cleanup(ctx)
 
+	roleID, _ := suite.RoleStorage.CreateRole(ctx, "admin", []string{"read", "write"})
+
 	registerResp, err := suite.AuthClient.Register(ctx, &sso.RegisterRequest{
 		Email:    "test@mail.com",
 		Password: "password",
+		Username: "user",
+		Roles:    []int64{int64(roleID)},
 	})
 
 	require.NoError(t, err)
@@ -29,13 +33,33 @@ func TestRegisterSuccess(t *testing.T) {
 
 	user, _ := suite.UserStorage.GetUser(ctx, "test@mail.com")
 	assert.WithinDuration(t, time.Now(), user.CreatedAt, 10*time.Second)
+	assert.Equal(t, []string{"admin"}, user.Roles)
+	assert.Equal(t, []string{"read", "write"}, user.Scopes)
 	assert.Nil(t, user.LastLogin)
+}
+
+func TestRegisterWithNotExistingRole(t *testing.T) {
+	ctx, suite := suite.New(t)
+	suite.Cleanup(ctx)
+
+	_, err := suite.AuthClient.Register(ctx, &sso.RegisterRequest{
+		Email:    "test@mail.com",
+		Password: "password",
+		Username: "user",
+		Roles:    []int64{int64(1)},
+	})
+
+	require.Error(t, err)
+	require.EqualError(t, err, "rpc error: code = InvalidArgument desc = one or more roles does not exist")
+
+	_, err = suite.UserStorage.GetUser(ctx, "test@mail.com")
+	require.EqualError(t, err, "user not found")
 }
 
 func TestRegisterWhenUserAlreadyRegistered(t *testing.T) {
 	ctx, suite := suite.New(t)
 
-	suite.CreateUser(ctx, "test@mail.com", "password")
+	suite.CreateUser(ctx, "test@mail.com", "password", "", []int64{})
 	suite.Cleanup(ctx)
 
 	_, err := suite.AuthClient.Register(ctx, &sso.RegisterRequest{
@@ -93,7 +117,7 @@ func TestLoginSuccess(t *testing.T) {
 	ctx, suite := suite.New(t)
 
 	appId, _ := suite.AppStorage.RegisterApp(ctx, "test", secret)
-	uuid := suite.CreateUser(ctx, "test@mail.com", "password")
+	uuid := suite.CreateUser(ctx, "test@mail.com", "password", "", []int64{})
 	suite.Cleanup(ctx)
 
 	resp, err := suite.AuthClient.Login(ctx, &sso.LoginRequest{
@@ -108,6 +132,8 @@ func TestLoginSuccess(t *testing.T) {
 	claims, err := tokenParser.Parse(resp.GetToken(), secret)
 	require.NoError(t, err)
 	require.Contains(t, claims.Subject, uuid)
+	assert.Nil(t, claims.Roles)
+	assert.Nil(t, claims.Scopes)
 }
 
 func TestLoginWithIncorrectPassword(t *testing.T) {
