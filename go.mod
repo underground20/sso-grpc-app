@@ -9,7 +9,7 @@ require (
 	github.com/ilyakaznacheev/cleanenv v1.5.0
 	github.com/jackc/pgx/v5 v5.9.2
 	github.com/stretchr/testify v1.11.1
-	github.com/underground20/sso-grpc-contract v0.0.0-20260610055837-46b43531576d
+	github.com/underground20/sso-grpc-contract v0.0.0-20260612094654-55cd9b05e1c6
 	github.com/underground20/sso-jwt-token v0.0.0-20260526145051-3cece3c7cdd0
 	golang.org/x/crypto v0.49.0
 	google.golang.org/grpc v1.80.0

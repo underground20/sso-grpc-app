@@ -14,7 +14,7 @@ type CreateRoleRequest struct {
 }
 
 type RoleCreator interface {
-	CreateRole(ctx context.Context, name string, permissions []string) error
+	CreateRole(ctx context.Context, name string, permissions []string) (int, error)
 }
 
 type RoleHandler struct {
@@ -42,7 +42,7 @@ func (h *RoleHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	err := h.roleCreator.CreateRole(r.Context(), req.Name, req.Permissions)
+	_, err := h.roleCreator.CreateRole(r.Context(), req.Name, req.Permissions)
 	if err != nil {
 		h.logger.Error("failed to create role", slog.String("error", err.Error()))
 		response.RespondWithError(w, http.StatusInternalServerError, "internal server error")

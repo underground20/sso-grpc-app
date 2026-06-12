@@ -47,6 +47,8 @@ github.com/stretchr/testify v1.11.1 h1:7s2iGBzp5EwR7/aIZr8ao5+dra3wiQyKjjFuvgVKu
 github.com/stretchr/testify v1.11.1/go.mod h1:wZwfW3scLgRK+23gO65QZefKpKQRnfz6sD981Nm4B6U=
 github.com/underground20/sso-grpc-contract v0.0.0-20260610055837-46b43531576d h1:iWLx9/m1s8g7fTMTq/xDATM2rUgRxcmofajJVFfMLUQ=
 github.com/underground20/sso-grpc-contract v0.0.0-20260610055837-46b43531576d/go.mod h1:fE4VTiPQdG7iRjDjCGE8xpwB7SLQX7TChQt22lPro7E=
+github.com/underground20/sso-grpc-contract v0.0.0-20260612094654-55cd9b05e1c6 h1:/cxAQ5XM3PB8eHKNdyWzbpJCSKY1tdRjuUBo02fs4ss=
+github.com/underground20/sso-grpc-contract v0.0.0-20260612094654-55cd9b05e1c6/go.mod h1:fE4VTiPQdG7iRjDjCGE8xpwB7SLQX7TChQt22lPro7E=
 github.com/underground20/sso-jwt-token v0.0.0-20260526145051-3cece3c7cdd0 h1:mGjA71qzanhAc9EATlEQjnJXQcHf4VSFfcSiwjK4iX0=
 github.com/underground20/sso-jwt-token v0.0.0-20260526145051-3cece3c7cdd0/go.mod h1:65z8OfsiGv/VgdvV/EKT77UGGRzA+MbrNUTJ3tO+v3w=
 go.opentelemetry.io/auto/sdk v1.2.1 h1:jXsnJ4Lmnqd11kwkBV2LgLoFMZKizbCi5fNZ/ipaZ64=

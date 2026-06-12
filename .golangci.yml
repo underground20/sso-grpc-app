@@ -26,10 +26,6 @@ issues:
               - gosec
               - errcheck
           text: ".*" 
-        - path: role_storage.go
-          linters:
-              - errcheck
-          text: ".*"
 
 output:
     formats:

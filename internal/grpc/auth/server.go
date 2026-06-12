@@ -9,16 +9,21 @@ import (
 	"log/slog"
 
 	sso "github.com/underground20/sso-grpc-contract/generated"
-	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 )
 
-type serverAPI struct {
+type Server struct {
 	sso.UnimplementedAuthServer
-	auth         Auth
-	roleProvider RoleProvider
-	logger       *slog.Logger
+	auth   Auth
+	logger *slog.Logger
+}
+
+func NewServer(auth Auth, logger *slog.Logger) *Server {
+	return &Server{
+		auth:   auth,
+		logger: logger,
+	}
 }
 
 type Auth interface {
@@ -32,18 +37,13 @@ type Auth interface {
 		ctx context.Context,
 		email string,
 		password string,
+		username string,
+		roles []int64,
 	) (userID string, err error)
-}
-
-type RoleProvider interface {
 	GetRoles(ctx context.Context) ([]models.Role, error)
 }
 
-func Register(gRPCServer *grpc.Server, auth Auth, roleProvider RoleProvider, logger *slog.Logger) {
-	sso.RegisterAuthServer(gRPCServer, newServerAPI(auth, roleProvider, logger))
-}
-
-func (s *serverAPI) Login(ctx context.Context, in *sso.LoginRequest) (*sso.LoginResponse, error) {
+func (s *Server) Login(ctx context.Context, in *sso.LoginRequest) (*sso.LoginResponse, error) {
 	if in.GetEmail() == "" {
 		return nil, status.Error(codes.InvalidArgument, "email is required")
 	}
@@ -59,7 +59,7 @@ func (s *serverAPI) Login(ctx context.Context, in *sso.LoginRequest) (*sso.Login
 	token, err := s.auth.Login(ctx, in.GetEmail(), in.GetPassword(), int(in.GetAppId()))
 	if err != nil {
 		if errors.Is(err, auth.ErrInvalidCredentials) {
-			return nil, status.Error(codes.InvalidArgument, "invalid email or password")
+			return nil, status.Error(codes.InvalidArgument, err.Error())
 		}
 
 		s.logger.Error("failed to login", slog.String("error", err.Error()))
@@ -70,7 +70,7 @@ func (s *serverAPI) Login(ctx context.Context, in *sso.LoginRequest) (*sso.Login
 	return &sso.LoginResponse{Token: token}, nil
 }
 
-func (s *serverAPI) Register(ctx context.Context, in *sso.RegisterRequest) (*sso.RegisterResponse, error) {
+func (s *Server) Register(ctx context.Context, in *sso.RegisterRequest) (*sso.RegisterResponse, error) {
 	if in.GetEmail() == "" {
 		return nil, status.Error(codes.InvalidArgument, "email is required")
 	}
@@ -79,10 +79,14 @@ func (s *serverAPI) Register(ctx context.Context, in *sso.RegisterRequest) (*sso
 		return nil, status.Error(codes.InvalidArgument, "password is required")
 	}
 
-	uid, err := s.auth.RegisterNewUser(ctx, in.GetEmail(), in.GetPassword())
+	uid, err := s.auth.RegisterNewUser(ctx, in.GetEmail(), in.GetPassword(), in.GetUsername(), in.GetRoles())
 	if err != nil {
+		if errors.Is(err, auth.ErrRolesDoesNotExists) {
+			return nil, status.Error(codes.InvalidArgument, err.Error())
+		}
+
 		if errors.Is(err, auth.ErrInvalidCredentials) {
-			return nil, status.Error(codes.InvalidArgument, "invalid email or password")
+			return nil, status.Error(codes.InvalidArgument, err.Error())
 		}
 
 		if errors.Is(err, storage.ErrUserExists) {
@@ -91,14 +95,14 @@ func (s *serverAPI) Register(ctx context.Context, in *sso.RegisterRequest) (*sso
 
 		s.logger.Error("failed to register new user", slog.String("error", err.Error()))
 
-		return nil, status.Error(codes.Internal, err.Error())
+		return nil, status.Error(codes.Internal, "failed to register new user")
 	}
 
 	return &sso.RegisterResponse{UserId: uid}, nil
 }
 
-func (s *serverAPI) GetRoles(ctx context.Context, _ *sso.GetRolesRequest) (*sso.GetRolesResponse, error) {
-	roles, err := s.roleProvider.GetRoles(ctx)
+func (s *Server) GetRoles(ctx context.Context, _ *sso.GetRolesRequest) (*sso.GetRolesResponse, error) {
+	roles, err := s.auth.GetRoles(ctx)
 	if err != nil {
 		s.logger.Error("failed to get roles", slog.String("error", err.Error()))
 
@@ -111,12 +115,4 @@ func (s *serverAPI) GetRoles(ctx context.Context, _ *sso.GetRolesRequest) (*sso.
 	}
 
 	return &sso.GetRolesResponse{Roles: rolesList}, nil
-}
-
-func newServerAPI(auth Auth, roleProvider RoleProvider, logger *slog.Logger) *serverAPI {
-	return &serverAPI{
-		auth:         auth,
-		roleProvider: roleProvider,
-		logger:       logger,
-	}
 }
