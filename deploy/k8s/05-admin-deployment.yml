@@ -1,0 +1,60 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: admin-service
+spec:
+  selector:
+    app: sso-admin
+  ports:
+    - name: http
+      protocol: TCP
+      port: 8080
+      targetPort: 8080
+  type: LoadBalancer
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: admin-deployment
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: sso-admin
+  template:
+    metadata:
+      labels:
+        app: sso-admin
+    spec:
+      initContainers:
+        -   name: migrator
+            image: sanitar/sso:migrator-v1.0
+            command: [ "migrate" ]
+            args:
+              - "-path"
+              - "/migrations"
+              - "-database"
+              - "$(DATABASE_URL)"
+              - "up"
+            env:
+              -   name: DATABASE_URL
+                  value: "postgres://$(DB_USER):$(DB_PASSWORD)@$(DB_HOST):$(DB_PORT)/$(DB_NAME)?sslmode=disable"
+            envFrom:
+              -   configMapRef:
+                    name: sso-config
+              -   secretRef:
+                    name: sso-secrets
+            restartPolicy: OnFailure
+      containers:
+        - name: sso-admin
+          image: sanitar/sso:admin-v1.0
+          ports:
+            - containerPort: 8080
+          env:
+            -   name: DATABASE_URL
+                value: "postgres://$(DB_USER):$(DB_PASSWORD)@$(DB_HOST):$(DB_PORT)/$(DB_NAME)?sslmode=disable"
+          envFrom:
+            - configMapRef:
+                name: sso-config
+            - secretRef:
+                name: sso-secrets

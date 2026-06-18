@@ -1,0 +1,15 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: sso-config
+data:
+  DB_HOST: "postgres-service"
+  DB_NAME: "app"
+  DB_PORT: "5432"
+
+  GRPC_PORT: "44044"
+  GRPC_TIMEOUT: "5s"
+  HTTP_PORT: "8080"
+  HTTP_TIMEOUT: "5s"
+  TOKEN_TTL: "2h"
+  ENV: "dev"

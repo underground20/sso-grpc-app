@@ -1,0 +1,59 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: app-service
+spec:
+  selector:
+    app: sso-app
+  ports:
+    - name: grpc
+      protocol: TCP
+      port: 44044
+      targetPort: 44044
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: app-deployment
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: sso-app
+  template:
+    metadata:
+      labels:
+        app: sso-app
+    spec:
+      initContainers:
+        - name: migrator
+          image: sanitar/sso:migrator-v1.0
+          command: [ "migrate" ]
+          args:
+            - "-path"
+            - "/migrations"
+            - "-database"
+            - "$(DATABASE_URL)"
+            - "up"
+          env:
+            -   name: DATABASE_URL
+                value: "postgres://$(DB_USER):$(DB_PASSWORD)@$(DB_HOST):$(DB_PORT)/$(DB_NAME)?sslmode=disable"
+          envFrom:
+            -   configMapRef:
+                  name: sso-config
+            -   secretRef:
+                  name: sso-secrets
+          restartPolicy: OnFailure
+      containers:
+        - name: sso-app
+          image: sanitar/sso:app-v1.0
+          ports:
+            - containerPort: 44044
+          env:
+            -   name: DATABASE_URL
+                value: "postgres://$(DB_USER):$(DB_PASSWORD)@$(DB_HOST):$(DB_PORT)/$(DB_NAME)?sslmode=disable"
+          envFrom:
+            - configMapRef:
+                name: sso-config
+            - secretRef:
+                name: sso-secrets

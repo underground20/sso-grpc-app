@@ -24,12 +24,12 @@ services:
             postgres:
                 condition: service_healthy
     migrator:
-        image: migrate/migrate:v4.15.0
+        build:
+            context: .
+            dockerfile: build/migrator/Dockerfile
         depends_on:
             postgres:
                 condition: service_healthy
-        volumes:
-            - ./migrations:/migrations
         env_file:
             - .env
         command: [
