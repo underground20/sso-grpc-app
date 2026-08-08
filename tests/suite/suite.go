@@ -2,7 +2,9 @@ package suite
 
 import (
 	"app/internal/infrastructure/db"
+	"app/internal/infrastructure/id"
 	"app/internal/infrastructure/logging"
+	"app/internal/infrastructure/token"
 	"app/internal/storage"
 	"context"
 	"log"
@@ -19,11 +21,12 @@ import (
 
 type Suite struct {
 	*testing.T
-	AuthClient  sso.AuthClient
-	db          *db.Database
-	AppStorage  storage.AppStorage
-	RoleStorage storage.RoleStorage
-	UserStorage storage.UserStorage
+	AuthClient          sso.AuthClient
+	db                  *db.Database
+	AppStorage          storage.AppStorage
+	RoleStorage         storage.RoleStorage
+	UserStorage         storage.UserStorage
+	RefreshTokenStorage storage.RefreshTokenStorage
 }
 
 func New(t *testing.T) (context.Context, *Suite) {
@@ -53,22 +56,74 @@ func New(t *testing.T) (context.Context, *Suite) {
 	appStorage := storage.NewAppStorage(database)
 	roleStorage := storage.NewRoleStorage(database, logger)
 	userStorage := storage.NewUserStorage(database, logger)
+	tokenStorage := storage.NewRefreshTokenStorage(database)
 
 	return ctx, &Suite{
-		T:           t,
-		AuthClient:  authClient,
-		db:          database,
-		AppStorage:  appStorage,
-		RoleStorage: roleStorage,
-		UserStorage: userStorage,
+		T:                   t,
+		AuthClient:          authClient,
+		db:                  database,
+		AppStorage:          appStorage,
+		RoleStorage:         roleStorage,
+		UserStorage:         userStorage,
+		RefreshTokenStorage: tokenStorage,
 	}
 }
 
-func (s *Suite) CreateUser(ctx context.Context, email, password, username string, roles []int64) string {
+func (s *Suite) CreateUser(ctx context.Context, email, password, username string, roles []int64) uuid.UUID {
 	userUuid, _ := uuid.NewV7()
 	passwordHash, _ := bcrypt.GenerateFromPassword([]byte(password), bcrypt.MinCost)
 	_ = s.UserStorage.SaveUser(ctx, userUuid, email, passwordHash, username, roles)
-	return userUuid.String()
+	return userUuid
+}
+
+func (s *Suite) CreateRefreshToken(ctx context.Context, userId uuid.UUID) token.RefreshToken {
+	token, _ := token.GenerateRefreshToken(userId)
+	s.RefreshTokenStorage.CreateToken(ctx, token)
+
+	return token
+}
+
+func (s *Suite) CreateExpiredToken(ctx context.Context, userId uuid.UUID) token.RefreshToken {
+	newExpiredToken := token.RefreshToken{
+		Id:        id.Generate(),
+		Token:     "expired",
+		UserId:    userId,
+		ExpiresAt: time.Now().UTC().Add(-time.Hour),
+		Revoked:   false,
+	}
+
+	s.RefreshTokenStorage.CreateToken(ctx, newExpiredToken)
+
+	return newExpiredToken
+}
+
+func (s *Suite) CreateRevokedToken(ctx context.Context, userId uuid.UUID) token.RefreshToken {
+	newExpiredToken := token.RefreshToken{
+		Id:        id.Generate(),
+		Token:     "test",
+		UserId:    userId,
+		ExpiresAt: time.Now().Add(time.Hour * 5),
+		Revoked:   true,
+	}
+
+	s.RefreshTokenStorage.CreateToken(ctx, newExpiredToken)
+
+	return newExpiredToken
+}
+
+func (s *Suite) ExistRefreshToken(ctx context.Context, userId uuid.UUID) bool {
+	var exists bool
+	err := s.db.Conn.QueryRow(
+		ctx,
+		"SELECT EXISTS(SELECT 1 FROM refresh_tokens WHERE user_id = $1)",
+		userId,
+	).Scan(&exists)
+
+	if err != nil {
+		return false
+	}
+
+	return exists
 }
 
 func (s *Suite) Cleanup(ctx context.Context) {

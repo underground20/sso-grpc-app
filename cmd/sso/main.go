@@ -19,21 +19,33 @@ import (
 func main() {
 	cfg := config.MustLoad()
 	ctx := context.Background()
-	db, err := db.New(cfg.DatabaseUrl, ctx)
+	database, err := db.New(cfg.DatabaseUrl, ctx)
 	if err != nil {
 		log.Fatalf("Failed to connect to database: %v", err)
 	}
 
 	logger := logging.Setup(cfg.Env)
-	userStorage := storage.NewUserStorage(db, logger)
-	appStorage := storage.NewAppStorage(db)
+	userStorage := storage.NewUserStorage(database, logger)
+	appStorage := storage.NewAppStorage(database)
 	tokenGenerator, err := user.NewTokenGenerator(cfg.TokenTTL)
-	roleProvider := storage.NewRoleStorage(db, logger)
+	roleProvider := storage.NewRoleStorage(database, logger)
 	if err != nil {
 		log.Fatalf("Failed to create token generator: %v", err)
 	}
 
-	auth := auth.New(logger, userStorage, appStorage, roleProvider, tokenGenerator, cfg.PasswordCost)
+	refreshTokenStorage := storage.NewRefreshTokenStorage(database)
+	transactionExecutor := db.NewTransactionExecutor(database, logger)
+
+	auth := auth.New(
+		logger,
+		userStorage,
+		appStorage,
+		roleProvider,
+		refreshTokenStorage,
+		transactionExecutor,
+		tokenGenerator,
+		cfg.PasswordCost,
+	)
 	grpcApp := app.New(logger, auth, cfg.GRPC.Port, cfg.TokenTTL)
 
 	go func() {

@@ -31,7 +31,7 @@ func TestRegisterSuccess(t *testing.T) {
 	require.NoError(t, err)
 	assert.NotEmpty(t, registerResp.GetUserId())
 
-	user, _ := suite.UserStorage.GetUser(ctx, "test@mail.com")
+	user, _ := suite.UserStorage.GetUserByEmail(ctx, "test@mail.com")
 	assert.WithinDuration(t, time.Now(), user.CreatedAt, 10*time.Second)
 	assert.Equal(t, []string{"admin"}, user.Roles)
 	assert.Equal(t, []string{"read", "write"}, user.Scopes)
@@ -52,7 +52,7 @@ func TestRegisterWithNotExistingRole(t *testing.T) {
 	require.Error(t, err)
 	require.EqualError(t, err, "rpc error: code = InvalidArgument desc = one or more roles does not exist")
 
-	_, err = suite.UserStorage.GetUser(ctx, "test@mail.com")
+	_, err = suite.UserStorage.GetUserByEmail(ctx, "test@mail.com")
 	require.EqualError(t, err, "user not found")
 }
 
@@ -129,11 +129,13 @@ func TestLoginSuccess(t *testing.T) {
 	require.NoError(t, err)
 
 	tokenParser, _ := user.NewTokenGenerator(time.Hour)
-	claims, err := tokenParser.Parse(resp.GetToken(), secret)
+	claims, err := tokenParser.Parse(resp.GetAccessToken(), secret)
 	require.NoError(t, err)
-	require.Contains(t, claims.Subject, uuid)
+	require.Contains(t, claims.Subject, uuid.String())
 	assert.Nil(t, claims.Roles)
 	assert.Nil(t, claims.Scopes)
+	existToken := suite.ExistRefreshToken(ctx, uuid)
+	assert.True(t, existToken)
 }
 
 func TestLoginWithIncorrectPassword(t *testing.T) {
@@ -193,4 +195,72 @@ func TestGetRolesList(t *testing.T) {
 		assert.Equal(t, expectedRole.Name, actualRole.Name)
 		assert.ElementsMatch(t, expectedRole.Permissions, actualRole.Permissions)
 	}
+}
+
+func TestGetNewTokenWhenRefreshTokenNotExpired(t *testing.T) {
+	ctx, suite := suite.New(t)
+
+	appId, _ := suite.AppStorage.RegisterApp(ctx, "test", secret)
+	uuid := suite.CreateUser(ctx, "test@mail.com", "password", "", []int64{})
+	suite.Cleanup(ctx)
+
+	refreshToken := suite.CreateRefreshToken(ctx, uuid)
+	resp, err := suite.AuthClient.GetNewToken(ctx, &sso.GetNewTokenRequest{
+		RefreshToken: refreshToken.Token,
+		AppId:        int64(appId),
+	})
+
+	require.NoError(t, err)
+	assert.Equal(t, refreshToken.Token, resp.GetRefreshToken())
+}
+
+func TestGetNewTokenWhenRefreshTokenIsRevoked(t *testing.T) {
+	ctx, suite := suite.New(t)
+
+	appId, _ := suite.AppStorage.RegisterApp(ctx, "test", secret)
+	uuid := suite.CreateUser(ctx, "test@mail.com", "password", "", []int64{})
+	suite.Cleanup(ctx)
+
+	refreshToken := suite.CreateRevokedToken(ctx, uuid)
+	_, err := suite.AuthClient.GetNewToken(ctx, &sso.GetNewTokenRequest{
+		RefreshToken: refreshToken.Token,
+		AppId:        int64(appId),
+	})
+
+	require.EqualError(t, err, "rpc error: code = PermissionDenied desc = refresh token is revoked")
+}
+
+func TestGetNewTokenWhenOldTokenNotExist(t *testing.T) {
+	ctx, suite := suite.New(t)
+
+	appId, _ := suite.AppStorage.RegisterApp(ctx, "test", secret)
+	suite.Cleanup(ctx)
+
+	_, err := suite.AuthClient.GetNewToken(ctx, &sso.GetNewTokenRequest{
+		RefreshToken: "not_existing_token",
+		AppId:        int64(appId),
+	})
+
+	require.EqualError(t, err, "rpc error: code = NotFound desc = refresh token not found")
+}
+
+func TestGetNewTokenWhenRefreshTokenIsExpired(t *testing.T) {
+	ctx, suite := suite.New(t)
+
+	appId, _ := suite.AppStorage.RegisterApp(ctx, "test", secret)
+	uuid := suite.CreateUser(ctx, "test@mail.com", "password", "", []int64{})
+	suite.Cleanup(ctx)
+
+	expiredToken := suite.CreateExpiredToken(ctx, uuid)
+
+	resp, err := suite.AuthClient.GetNewToken(ctx, &sso.GetNewTokenRequest{
+		RefreshToken: expiredToken.Token,
+		AppId:        int64(appId),
+	})
+
+	require.NoError(t, err)
+	assert.NotEqual(t, expiredToken.Token, resp.GetRefreshToken())
+
+	revokedToken, _ := suite.RefreshTokenStorage.GetToken(ctx, expiredToken.Token)
+	assert.True(t, revokedToken.Revoked)
 }

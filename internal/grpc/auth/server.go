@@ -32,7 +32,7 @@ type Auth interface {
 		email string,
 		password string,
 		appID int,
-	) (token string, err error)
+	) (token auth.TokenPair, err error)
 	RegisterNewUser(
 		ctx context.Context,
 		email string,
@@ -41,6 +41,7 @@ type Auth interface {
 		roles []int64,
 	) (userID string, err error)
 	GetRoles(ctx context.Context) ([]models.Role, error)
+	GetNewToken(ctx context.Context, refreshToken string, appId int64) (auth.TokenPair, error)
 }
 
 func (s *Server) Login(ctx context.Context, in *sso.LoginRequest) (*sso.LoginResponse, error) {
@@ -56,7 +57,7 @@ func (s *Server) Login(ctx context.Context, in *sso.LoginRequest) (*sso.LoginRes
 		return nil, status.Error(codes.InvalidArgument, "app_id is required")
 	}
 
-	token, err := s.auth.Login(ctx, in.GetEmail(), in.GetPassword(), int(in.GetAppId()))
+	tokenPair, err := s.auth.Login(ctx, in.GetEmail(), in.GetPassword(), int(in.GetAppId()))
 	if err != nil {
 		if errors.Is(err, auth.ErrInvalidCredentials) {
 			return nil, status.Error(codes.InvalidArgument, err.Error())
@@ -67,7 +68,7 @@ func (s *Server) Login(ctx context.Context, in *sso.LoginRequest) (*sso.LoginRes
 		return nil, status.Error(codes.Internal, "failed to login")
 	}
 
-	return &sso.LoginResponse{Token: token}, nil
+	return &sso.LoginResponse{AccessToken: tokenPair.AccessToken, RefreshToken: tokenPair.RefreshToken}, nil
 }
 
 func (s *Server) Register(ctx context.Context, in *sso.RegisterRequest) (*sso.RegisterResponse, error) {
@@ -115,4 +116,29 @@ func (s *Server) GetRoles(ctx context.Context, _ *sso.GetRolesRequest) (*sso.Get
 	}
 
 	return &sso.GetRolesResponse{Roles: rolesList}, nil
+}
+
+func (s *Server) GetNewToken(ctx context.Context, in *sso.GetNewTokenRequest) (*sso.GetNewTokenResponse, error) {
+	if in.GetRefreshToken() == "" {
+		return nil, status.Error(codes.InvalidArgument, "empty refresh token")
+	}
+
+	tokenPair, err := s.auth.GetNewToken(ctx, in.GetRefreshToken(), in.GetAppId())
+	if err != nil {
+		if errors.Is(err, storage.ErrTokenNotFound) {
+			return nil, status.Error(codes.NotFound, err.Error())
+		}
+
+		if errors.Is(err, auth.ErrRefreshTokenIsRevoked) {
+			return nil, status.Error(codes.PermissionDenied, err.Error())
+		}
+
+		if errors.Is(err, storage.ErrAppNotFound) {
+			return nil, status.Error(codes.NotFound, err.Error())
+		}
+
+		return nil, status.Error(codes.Internal, err.Error())
+	}
+
+	return &sso.GetNewTokenResponse{AccessToken: tokenPair.AccessToken, RefreshToken: tokenPair.RefreshToken}, nil
 }

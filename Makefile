@@ -1,3 +1,5 @@
+build-images: build-app build-admin build-migrator
+
 build-app:
 	docker build -t sanitar/sso:app-v1.0 -f build/app/Dockerfile .
 	
@@ -14,6 +16,9 @@ push-images:
 
 k8s-run:
 	kubectl apply -f deploy/k8s
+
+lint:
+	golangci-lint run ./...
 	
 k8s-remove:
 	kubectl delete -f deploy/k8s

@@ -27,13 +27,29 @@ func NewUserStorage(db *db.Database, logger *slog.Logger) UserStorage {
 	return UserStorage{db: db, logger: logger}
 }
 
-func (s UserStorage) GetUser(ctx context.Context, email string) (models.User, error) {
-	var user models.User
-	err := s.db.Conn.QueryRow(
+func (s UserStorage) GetUserById(ctx context.Context, id uuid.UUID) (models.User, error) {
+	row := s.db.Conn.QueryRow(
+		ctx,
+		`SELECT id, email, pass_hash, username, status, created_at, last_login FROM users WHERE id = $1`,
+		id,
+	)
+
+	return s.getUser(ctx, row)
+}
+
+func (s UserStorage) GetUserByEmail(ctx context.Context, email string) (models.User, error) {
+	row := s.db.Conn.QueryRow(
 		ctx,
 		`SELECT id, email, pass_hash, username, status, created_at, last_login FROM users WHERE email = $1`,
 		email,
-	).Scan(
+	)
+
+	return s.getUser(ctx, row)
+}
+
+func (s UserStorage) getUser(ctx context.Context, row pgx.Row) (models.User, error) {
+	var user models.User
+	err := row.Scan(
 		&user.ID, &user.Email, &user.PassHash, &user.Username, &user.Status, &user.CreatedAt, &user.LastLogin,
 	)
 	if err != nil {
@@ -125,7 +141,7 @@ func (s UserStorage) SaveUser(ctx context.Context, uuid uuid.UUID, email string,
 	return transaction.Commit(ctx)
 }
 
-func (s UserStorage) UpdateLastLogin(ctx context.Context, userID string) error {
+func (s UserStorage) UpdateLastLogin(ctx context.Context, userID uuid.UUID) error {
 	_, err := s.db.Conn.Exec(
 		ctx,
 		`UPDATE users SET last_login = NOW() WHERE id = $1`,
