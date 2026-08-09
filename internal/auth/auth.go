@@ -86,8 +86,8 @@ func New(
 	}
 }
 
-func (a *Auth) Login(ctx context.Context, email, password string, appId int) (TokenPair, error) {
-	user, err := a.userStorage.GetUserByEmail(ctx, email)
+func (a *Auth) Login(ctx context.Context, command LoginCommand) (TokenPair, error) {
+	user, err := a.userStorage.GetUserByEmail(ctx, command.Email)
 	if err != nil {
 		if errors.Is(err, storage.ErrUserNotFound) {
 			return TokenPair{}, ErrInvalidCredentials
@@ -96,7 +96,7 @@ func (a *Auth) Login(ctx context.Context, email, password string, appId int) (To
 		return TokenPair{}, err
 	}
 
-	if err := bcrypt.CompareHashAndPassword(user.PassHash, []byte(password)); err != nil {
+	if err := bcrypt.CompareHashAndPassword(user.PassHash, []byte(command.Password)); err != nil {
 		a.logger.Info("invalid credentials", slog.String("error", err.Error()))
 
 		return TokenPair{}, ErrInvalidCredentials
@@ -122,7 +122,7 @@ func (a *Auth) Login(ctx context.Context, email, password string, appId int) (To
 		return nil
 	})
 
-	app, err := a.appProvider.GetApp(ctx, appId)
+	app, err := a.appProvider.GetApp(ctx, command.AppID)
 	if err != nil {
 		return TokenPair{}, err
 	}
@@ -144,15 +144,15 @@ func (a *Auth) Login(ctx context.Context, email, password string, appId int) (To
 	return TokenPair{AccessToken: accessToken, RefreshToken: refreshToken.Token}, nil
 }
 
-func (a *Auth) RegisterNewUser(ctx context.Context, email, password, username string, roles []int64) (string, error) {
-	passwordHash, err := bcrypt.GenerateFromPassword([]byte(password), a.passwordCost)
+func (a *Auth) RegisterNewUser(ctx context.Context, command RegisterCommand) (string, error) {
+	passwordHash, err := bcrypt.GenerateFromPassword([]byte(command.Password), a.passwordCost)
 	if err != nil {
 		return "", fmt.Errorf("failed to generate password hash: %w", err)
 	}
 
 	newUuid := id.Generate()
-	if len(roles) > 0 {
-		ok, err := a.roleProvider.RolesExist(ctx, roles)
+	if len(command.Roles) > 0 {
+		ok, err := a.roleProvider.RolesExist(ctx, command.Roles)
 		if err != nil {
 			return "", err
 		}
@@ -162,7 +162,7 @@ func (a *Auth) RegisterNewUser(ctx context.Context, email, password, username st
 		}
 	}
 
-	err = a.userStorage.SaveUser(ctx, newUuid, email, passwordHash, username, roles)
+	err = a.userStorage.SaveUser(ctx, newUuid, command.Email, passwordHash, command.Username, command.Roles)
 	if err != nil {
 		return "", err
 	}

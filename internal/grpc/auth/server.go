@@ -3,9 +3,7 @@ package auth
 import (
 	"app/internal/auth"
 	"app/internal/models"
-	"app/internal/storage"
 	"context"
-	"errors"
 	"log/slog"
 
 	sso "github.com/underground20/sso-grpc-contract/generated"
@@ -15,88 +13,73 @@ import (
 
 type Server struct {
 	sso.UnimplementedAuthServer
-	auth   Auth
-	logger *slog.Logger
+	auth      Auth
+	validator Validator
+	logger    *slog.Logger
 }
 
-func NewServer(auth Auth, logger *slog.Logger) *Server {
+func NewServer(auth Auth, logger *slog.Logger, validator Validator) *Server {
 	return &Server{
-		auth:   auth,
-		logger: logger,
+		auth:      auth,
+		logger:    logger,
+		validator: validator,
 	}
 }
 
 type Auth interface {
-	Login(
-		ctx context.Context,
-		email string,
-		password string,
-		appID int,
-	) (token auth.TokenPair, err error)
-	RegisterNewUser(
-		ctx context.Context,
-		email string,
-		password string,
-		username string,
-		roles []int64,
-	) (userID string, err error)
+	Login(ctx context.Context, command auth.LoginCommand) (token auth.TokenPair, err error)
+	RegisterNewUser(ctx context.Context, command auth.RegisterCommand) (userID string, err error)
 	GetRoles(ctx context.Context) ([]models.Role, error)
 	GetNewToken(ctx context.Context, refreshToken string, appId int64) (auth.TokenPair, error)
 }
 
 func (s *Server) Login(ctx context.Context, in *sso.LoginRequest) (*sso.LoginResponse, error) {
-	if in.GetEmail() == "" {
-		return nil, status.Error(codes.InvalidArgument, "email is required")
+	command := auth.LoginCommand{
+		Email:    in.GetEmail(),
+		Password: in.GetPassword(),
+		AppID:    int(in.GetAppId()),
 	}
 
-	if in.GetPassword() == "" {
-		return nil, status.Error(codes.InvalidArgument, "password is required")
-	}
-
-	if in.GetAppId() == 0 {
-		return nil, status.Error(codes.InvalidArgument, "app_id is required")
-	}
-
-	tokenPair, err := s.auth.Login(ctx, in.GetEmail(), in.GetPassword(), int(in.GetAppId()))
+	err := s.validator.Validate(command)
 	if err != nil {
-		if errors.Is(err, auth.ErrInvalidCredentials) {
-			return nil, status.Error(codes.InvalidArgument, err.Error())
+		return nil, err
+	}
+
+	tokenPair, err := s.auth.Login(ctx, command)
+	if err != nil {
+		gRPCErr, isInternal := ToGRPCErr(err, "failed to login")
+		if isInternal {
+			s.logger.Error("failed to login", slog.String("error", err.Error()))
 		}
 
-		s.logger.Error("failed to login", slog.String("error", err.Error()))
-
-		return nil, status.Error(codes.Internal, "failed to login")
+		return nil, gRPCErr
 	}
 
 	return &sso.LoginResponse{AccessToken: tokenPair.AccessToken, RefreshToken: tokenPair.RefreshToken}, nil
 }
 
 func (s *Server) Register(ctx context.Context, in *sso.RegisterRequest) (*sso.RegisterResponse, error) {
-	if in.GetEmail() == "" {
-		return nil, status.Error(codes.InvalidArgument, "email is required")
+	command := auth.RegisterCommand{
+		Email:    in.GetEmail(),
+		Password: in.GetPassword(),
+		Username: in.GetUsername(),
+		Roles:    in.GetRoles(),
 	}
 
-	if in.GetPassword() == "" {
-		return nil, status.Error(codes.InvalidArgument, "password is required")
-	}
-
-	uid, err := s.auth.RegisterNewUser(ctx, in.GetEmail(), in.GetPassword(), in.GetUsername(), in.GetRoles())
+	err := s.validator.Validate(command)
 	if err != nil {
-		if errors.Is(err, auth.ErrRolesDoesNotExists) {
-			return nil, status.Error(codes.InvalidArgument, err.Error())
+		return nil, err
+	}
+
+	uid, err := s.auth.RegisterNewUser(ctx, command)
+	if err != nil {
+		gRPCErr, isInternal := ToGRPCErr(err, "failed to register new user")
+		if isInternal {
+			s.logger.Error("failed to register new user", slog.String("error", err.Error()))
 		}
 
-		if errors.Is(err, auth.ErrInvalidCredentials) {
-			return nil, status.Error(codes.InvalidArgument, err.Error())
-		}
+		return nil, gRPCErr
 
-		if errors.Is(err, storage.ErrUserExists) {
-			return nil, status.Error(codes.AlreadyExists, "user already registered")
-		}
-
-		s.logger.Error("failed to register new user", slog.String("error", err.Error()))
-
-		return nil, status.Error(codes.Internal, "failed to register new user")
 	}
 
 	return &sso.RegisterResponse{UserId: uid}, nil
@@ -125,19 +108,12 @@ func (s *Server) GetNewToken(ctx context.Context, in *sso.GetNewTokenRequest) (*
 
 	tokenPair, err := s.auth.GetNewToken(ctx, in.GetRefreshToken(), in.GetAppId())
 	if err != nil {
-		if errors.Is(err, storage.ErrTokenNotFound) {
-			return nil, status.Error(codes.NotFound, err.Error())
+		gRPCErr, isInternal := ToGRPCErr(err, "failed to get new token")
+		if isInternal {
+			s.logger.Error("failed to get new user", slog.String("error", err.Error()))
 		}
 
-		if errors.Is(err, auth.ErrRefreshTokenIsRevoked) {
-			return nil, status.Error(codes.PermissionDenied, err.Error())
-		}
-
-		if errors.Is(err, storage.ErrAppNotFound) {
-			return nil, status.Error(codes.NotFound, err.Error())
-		}
-
-		return nil, status.Error(codes.Internal, err.Error())
+		return nil, gRPCErr
 	}
 
 	return &sso.GetNewTokenResponse{AccessToken: tokenPair.AccessToken, RefreshToken: tokenPair.RefreshToken}, nil

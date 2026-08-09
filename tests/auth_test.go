@@ -81,22 +81,34 @@ func TestRegisterFail(t *testing.T) {
 		expectedErr string
 	}{
 		{
-			name:        "Register with Empty Password",
+			name:        "With empty password",
 			email:       "test@mail.com",
 			password:    "",
-			expectedErr: "password is required",
+			expectedErr: "Password is required",
 		},
 		{
-			name:        "Register with Empty Email",
+			name:        "With empty email",
 			email:       "",
 			password:    "password",
-			expectedErr: "email is required",
+			expectedErr: "Email is required",
 		},
 		{
-			name:        "Register with Both Empty",
+			name:        "With empty password and email",
 			email:       "",
 			password:    "",
-			expectedErr: "email is required",
+			expectedErr: "Email is required; Password is required",
+		},
+		{
+			name:        "With incorrect email",
+			email:       "invalid_email.ru",
+			password:    "gdjgeytiw",
+			expectedErr: "Invalid email format",
+		},
+		{
+			name:        "With short password",
+			email:       "test@mail.ru",
+			password:    "test",
+			expectedErr: "Password must be at least 6 characters",
 		},
 	}
 
@@ -154,7 +166,7 @@ func TestLoginWithIncorrectPassword(t *testing.T) {
 
 	_, err = suite.AuthClient.Login(ctx, &sso.LoginRequest{
 		Email:    "test@mail.com",
-		Password: "12345",
+		Password: "passwor",
 		AppId:    int64(appId),
 	})
 

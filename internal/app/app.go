@@ -43,7 +43,8 @@ func New(logger *slog.Logger, authServer auth.Auth, port int, tokenTTL time.Dura
 		logging.UnaryServerInterceptor(interceptorLogger(logger), loggingOptions...),
 	))
 
-	sso.RegisterAuthServer(gRPCServer, auth.NewServer(authServer, logger))
+	validator := auth.NewValidator()
+	sso.RegisterAuthServer(gRPCServer, auth.NewServer(authServer, logger, validator))
 
 	return &App{
 		logger:     logger,
