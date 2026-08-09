@@ -16,7 +16,7 @@ COPY . .
 
 RUN CGO_ENABLED=1 go build -o ./sso ./cmd/sso
 
-FROM alpine:3.22
+FROM alpine:3.22 AS final
 
 WORKDIR /app
 

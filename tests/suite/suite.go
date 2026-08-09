@@ -39,9 +39,9 @@ func New(t *testing.T) (context.Context, *Suite) {
 		cancelCtx()
 	})
 
-	grpcAddress := getEnv("LOCAL_GRPC_ADDRESS", "localhost:44044")
-	databaseUrl := getEnv("LOCAL_DATABASE_URL", "postgres://admin:admin@localhost:5432/app_test?sslmode=disable")
-	cc, err := grpc.NewClient(grpcAddress, grpc.WithTransportCredentials(insecure.NewCredentials()))
+	grpcPort := getEnv("GRPC_PORT", "")
+	databaseUrl := getEnv("DATABASE_URL", "")
+	cc, err := grpc.NewClient("app:"+grpcPort, grpc.WithTransportCredentials(insecure.NewCredentials()))
 	if err != nil {
 		log.Fatalf("grpc client connect failed: %v", err)
 	}

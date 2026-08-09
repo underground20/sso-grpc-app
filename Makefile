@@ -22,3 +22,6 @@ lint:
 	
 k8s-remove:
 	kubectl delete -f deploy/k8s
+	
+run-tests:
+	docker compose -f docker-compose.test.yml exec app go test -v -count=1 ./tests

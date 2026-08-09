@@ -3,10 +3,12 @@ services:
         build:
             context: .
             dockerfile: build/app/Dockerfile
+            target: builder
         env_file:
             - ./tests/.env
         ports:
             - ${GRPC_PORT}:${GRPC_PORT}
+        command: go run ./cmd/sso
         restart: unless-stopped
         depends_on:
             postgres:
